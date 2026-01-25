@@ -5,7 +5,13 @@ service cloud.firestore {
     // Sessions can be created by anyone (anonymous) and accessed by devices in the session
     match /sessions/{sessionId} {
       allow create: if true;
-      allow read, update: if resource.data.deviceIds.hasAny([request.auth.uid]);
+      // Allow read if authenticated (needed to join via pairing code)
+      allow read: if request.auth != null;
+      // Allow update if user is already in session OR is adding themselves to the session
+      allow update: if request.auth != null && (
+        resource.data.deviceIds.hasAny([request.auth.uid]) ||
+        request.resource.data.deviceIds.hasAny([request.auth.uid])
+      );
       allow delete: if false; // Only cleanup jobs should delete
       
       // Devices within a session
