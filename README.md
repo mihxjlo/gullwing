@@ -2,7 +2,7 @@
   <img src="assets/gullwinglogo.png" alt="Gullwing Logo" width="120" height="120">
 </p>
 
-<h1 align="center">Gullwing</h1>
+<h1 align="center">ClipSync</h1>
 
 <p align="center">
   <strong>Seamless cross-device clipboard synchronization</strong>
@@ -10,7 +10,6 @@
 
 <p align="center">
   <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#tech-stack">Tech Stack</a>
@@ -44,59 +43,6 @@ Whether you're copying a URL from your laptop to paste on your phone, or sharing
 <p align="center">
   <i>Screenshots coming soon</i>
 </p>
-
----
-
-## Prerequisites
-
-Before running Gullwing, ensure you have the following installed:
-
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (3.0+)
-- [Firebase CLI](https://firebase.google.com/docs/cli) (for deployment)
-- Android Studio / Xcode (for mobile development)
-- A Firebase project with Firestore and Authentication enabled
-
----
-
-## Installation
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/clipsync.git
-cd clipsync
-```
-
-### 2. Install Dependencies
-
-```bash
-flutter pub get
-```
-
-### 3. Firebase Configuration
-
-The app is pre-configured with Firebase. To use your own Firebase project:
-
-1. Create a new Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-2. Enable **Anonymous Authentication**
-3. Create a **Cloud Firestore** database
-4. Run FlutterFire CLI to configure:
-
-```bash
-dart pub global activate flutterfire_cli
-flutterfire configure
-```
-
-### 4. Run the App
-
-```bash
-# Run on connected device
-flutter run
-
-# Run on specific platform
-flutter run -d chrome    # Web
-flutter run -d android   # Android
-```
 
 ---
 
