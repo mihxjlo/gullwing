@@ -1,0 +1,26 @@
+{
+    "firestore": {
+        "rules": "firestore.rules"
+    },
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "gullwing-df99d",
+                    "appId": "1:917815174581:android:afa92b81901ac8a09065fc",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "gullwing-df99d",
+                    "configurations": {
+                        "android": "1:917815174581:android:afa92b81901ac8a09065fc",
+                        "ios": "1:917815174581:ios:75ae7aab797697039065fc",
+                        "web": "1:917815174581:web:a0512e82f48690479065fc"
+                    }
+                }
+            }
+        }
+    }
+}

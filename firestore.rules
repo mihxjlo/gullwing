@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Session-based access for pairing
+    // Sessions can be created by anyone (anonymous) and accessed by devices in the session
+    match /sessions/{sessionId} {
+      allow create: if true;
+      allow read, update: if resource.data.deviceIds.hasAny([request.auth.uid]);
+      allow delete: if false; // Only cleanup jobs should delete
+      
+      // Devices within a session
+      match /devices/{deviceId} {
+        allow read, create, update: if request.auth != null;
+        allow delete: if true;
+      }
+      
+      // Clipboard items within a session
+      match /clipboard_items/{itemId} {
+        allow read, create: if request.auth != null;
+        allow update, delete: if request.auth != null;
+      }
+    }
+    
+    // Pairing codes for quick lookup
+    match /pairing_codes/{code} {
+      allow read, create: if true;
+      allow update, delete: if true; // Cleanup when expired
+    }
+    
+    // Legacy user-based access (kept for backwards compatibility)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      match /devices/{deviceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /clipboard_items/{itemId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
