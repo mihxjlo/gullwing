@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../models/models.dart';
@@ -131,6 +132,13 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
       _inputController.selection = TextSelection.fromPosition(
         TextPosition(offset: data.text!.length),
       );
+    }
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -454,6 +462,8 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
   }
   
   Widget _buildSyncedItemRow(ClipboardItem item) {
+    final isLink = item.type == ClipboardContentType.link;
+    
     return InkWell(
       onTap: () => _copyToDevice(item.content),
       borderRadius: BorderRadius.circular(8),
@@ -488,6 +498,19 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(width: 8),
+            if (isLink)
+              IconButton(
+                icon: Icon(
+                  Icons.open_in_new,
+                  size: 16,
+                  color: AppColors.primaryAccent,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => _openUrl(item.content),
+                tooltip: 'Open link',
+              ),
+            if (isLink) const SizedBox(width: 12),
             Icon(
               Icons.content_copy_outlined,
               size: 16,

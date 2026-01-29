@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/clipboard_item.dart';
 import '../../services/clipboard_repository.dart';
+import '../../services/settings_service.dart';
 import 'clipboard_event.dart';
 import 'clipboard_state.dart';
 
@@ -129,8 +130,21 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
         deviceName: event.deviceName,
       );
       
-      // Add to Firestore
-      await _repository.addClipboardItem(item);
+      // Add to Firestore for sync
+      final addedItemId = await _repository.addClipboardItem(item);
+      
+      // If save history is disabled, schedule deletion after sync delay
+      // This allows sync to occur but treats items as transient
+      if (!settingsService.saveHistory && addedItemId != null && addedItemId.isNotEmpty) {
+        final itemIdToDelete = addedItemId;
+        Future.delayed(const Duration(seconds: 30), () async {
+          try {
+            await _repository.deleteClipboardItem(itemIdToDelete);
+          } catch (_) {
+            // Ignore deletion errors for transient items
+          }
+        });
+      }
       
       // Update current item in state
       final currentState = state;

@@ -132,20 +132,25 @@ class _PairingScreenState extends State<PairingScreen>
               color: AppColors.cardBackground,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: AppColors.primaryAccent,
-                borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              height: 48,
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: AppColors.primaryAccent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                indicatorPadding: const EdgeInsets.all(6),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelColor: Colors.white,
+                unselectedLabelColor: AppColors.secondaryText,
+                dividerColor: Colors.transparent,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                tabs: const [
+                  Tab(child: Text('Create Session')),
+                  Tab(child: Text('Join Session')),
+                ],
               ),
-              indicatorPadding: const EdgeInsets.all(4),
-              labelColor: Colors.white,
-              unselectedLabelColor: AppColors.secondaryText,
-              dividerColor: Colors.transparent,
-              tabs: const [
-                Tab(text: 'Create Session'),
-                Tab(text: 'Join Session'),
-              ],
             ),
           ),
           const SizedBox(height: 24),

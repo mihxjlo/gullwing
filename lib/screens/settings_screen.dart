@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/devices/devices_bloc.dart';
 import '../blocs/devices/devices_state.dart';
@@ -215,6 +216,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Divider(),
                     const SizedBox(height: 12),
                     ...devices.map((device) => _buildDeviceListItem(device)),
+                  ],
+                  
+                  // Session code display (for sharing with new devices)
+                  if (isConnected && (pairingState as PairingConnected).session.pairingCode.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.key_outlined,
+                            size: 18,
+                            color: AppColors.secondaryText,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Session Code',
+                                  style: AppTypography.metadata,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  (pairingState as PairingConnected).session.pairingCode,
+                                  style: AppTypography.codeText.copyWith(
+                                    fontSize: 16,
+                                    letterSpacing: 4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.copy,
+                              size: 18,
+                              color: AppColors.secondaryText,
+                            ),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(
+                                text: (pairingState as PairingConnected).session.pairingCode,
+                              ));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Session code copied!')),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                   
                   const SizedBox(height: 16),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../models/models.dart';
@@ -17,6 +18,13 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   String? _expandedId;
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +258,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               },
                             ),
                           ),
+                          if (item.type == ClipboardContentType.link) ...[
+                            const SizedBox(width: 12),
+                            SecondaryButton(
+                              label: 'Open',
+                              icon: Icons.open_in_new,
+                              onPressed: () => _openUrl(item.content),
+                            ),
+                          ],
                           const SizedBox(width: 12),
                           SecondaryButton(
                             label: 'Delete',
