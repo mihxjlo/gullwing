@@ -12,6 +12,7 @@ class PairingSession {
   final DateTime expiresAt;
   final List<String> deviceIds;
   final bool isActive;
+  final String hostDeviceId; // Session admin - if this device leaves, session closes
 
   const PairingSession({
     required this.id,
@@ -20,6 +21,7 @@ class PairingSession {
     required this.expiresAt,
     required this.deviceIds,
     this.isActive = true,
+    required this.hostDeviceId,
   });
 
   /// Check if the pairing code is still valid
@@ -42,6 +44,7 @@ class PairingSession {
       'expiresAt': Timestamp.fromDate(expiresAt),
       'deviceIds': deviceIds,
       'isActive': isActive,
+      'hostDeviceId': hostDeviceId,
     };
   }
 
@@ -60,6 +63,7 @@ class PairingSession {
           ?.map((e) => e as String)
           .toList() ?? [],
       isActive: data['isActive'] as bool? ?? true,
+      hostDeviceId: data['hostDeviceId'] as String? ?? '',
     );
   }
 
@@ -78,6 +82,7 @@ class PairingSession {
       expiresAt: now.add(codeValidity),
       deviceIds: [hostDeviceId],
       isActive: true,
+      hostDeviceId: hostDeviceId,
     );
   }
 
@@ -89,6 +94,7 @@ class PairingSession {
     DateTime? expiresAt,
     List<String>? deviceIds,
     bool? isActive,
+    String? hostDeviceId,
   }) {
     return PairingSession(
       id: id ?? this.id,
@@ -97,6 +103,7 @@ class PairingSession {
       expiresAt: expiresAt ?? this.expiresAt,
       deviceIds: deviceIds ?? this.deviceIds,
       isActive: isActive ?? this.isActive,
+      hostDeviceId: hostDeviceId ?? this.hostDeviceId,
     );
   }
 

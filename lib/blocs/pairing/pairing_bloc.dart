@@ -5,6 +5,7 @@ import '../../models/connected_device.dart';
 import '../../services/pairing_service.dart';
 import '../../services/device_repository.dart';
 import '../../services/session_repository.dart';
+import '../../services/storage_service.dart';
 import 'pairing_event.dart';
 import 'pairing_state.dart';
 
@@ -65,9 +66,8 @@ class PairingBloc extends Bloc<PairingEvent, PairingState> {
       // Start watching the session
       _watchSession(session.id);
       
-      // Determine if this device is the host (first device in list)
-      final isHost = session.deviceIds.isNotEmpty && 
-          session.deviceIds.first == _pairingService.deviceId;
+      // Determine if this device is the host
+      final isHost = session.hostDeviceId == _pairingService.deviceId;
       
       emit(PairingConnected(
         session: session,
@@ -145,8 +145,22 @@ class PairingBloc extends Bloc<PairingEvent, PairingState> {
     emit(const PairingLoading('Leaving session...'));
     
     try {
+      // Get session ID before leaving for cleanup
+      final sessionId = _pairingService.currentSessionId;
+      
       await _pairingService.leaveSession();
       _cancelSubscriptions();
+      
+      // Clean up storage files if we were connected to a session
+      // This helps stay within the 5GB free tier limit
+      if (sessionId != null) {
+        try {
+          await storageService.deleteSessionFiles(sessionId);
+        } catch (_) {
+          // Ignore cleanup errors - best effort
+        }
+      }
+      
       emit(const PairingDisconnected());
     } catch (e) {
       emit(PairingError('Failed to leave session: $e'));
@@ -183,9 +197,18 @@ class PairingBloc extends Bloc<PairingEvent, PairingState> {
   void _onSessionUpdated(
     PairingSessionUpdated event,
     Emitter<PairingState> emit,
-  ) {
+  ) async {
     final session = event.session;
     if (session == null) {
+      emit(const PairingDisconnected());
+      return;
+    }
+    
+    // Check if session has been deactivated (host left)
+    if (!session.isActive) {
+      // Clear local session state and disconnect
+      await _pairingService.clearLocalSessionState();
+      _cancelSubscriptions();
       emit(const PairingDisconnected());
       return;
     }
@@ -194,7 +217,7 @@ class PairingBloc extends Bloc<PairingEvent, PairingState> {
     
     // If we were showing code and now have other devices, transition to connected
     if (currentState is PairingCodeGenerated && session.deviceIds.length > 1) {
-      final isHost = session.deviceIds.first == _pairingService.deviceId;
+      final isHost = session.hostDeviceId == _pairingService.deviceId;
       emit(PairingConnected(
         session: session,
         devices: currentState is PairingConnected 

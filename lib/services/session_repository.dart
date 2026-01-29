@@ -131,17 +131,29 @@ class SessionRepository {
   }
   
   /// Leave a session (remove device from session)
+  /// If the host leaves, the entire session is deactivated
   Future<void> leaveSession({
     required String sessionId,
     required String deviceId,
   }) async {
-    // Remove device from session's device list
-    await _sessionsCollection.doc(sessionId).update({
-      'deviceIds': FieldValue.arrayRemove([deviceId]),
-    });
+    // Get session to check if this device is the host
+    final session = await getSession(sessionId);
     
-    // Remove device document
-    await getDevicesCollection(sessionId).doc(deviceId).delete();
+    if (session != null && session.hostDeviceId == deviceId) {
+      // Host is leaving - deactivate the entire session
+      await deactivateSession(sessionId);
+      
+      // Remove device document
+      await getDevicesCollection(sessionId).doc(deviceId).delete();
+    } else {
+      // Regular device leaving - just remove from session
+      await _sessionsCollection.doc(sessionId).update({
+        'deviceIds': FieldValue.arrayRemove([deviceId]),
+      });
+      
+      // Remove device document
+      await getDevicesCollection(sessionId).doc(deviceId).delete();
+    }
   }
   
   /// Deactivate a session (host action)

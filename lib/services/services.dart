@@ -5,3 +5,5 @@ export 'device_repository.dart';
 export 'settings_service.dart';
 export 'session_repository.dart';
 export 'pairing_service.dart';
+export 'storage_service.dart';
+export 'download_service.dart';

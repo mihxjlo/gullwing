@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:equatable/equatable.dart';
 import '../../models/clipboard_item.dart';
 
@@ -76,3 +77,32 @@ class ClipboardItemCopiedState extends ClipboardState {
   @override
   List<Object?> get props => [item, items];
 }
+
+/// File downloaded and ready for use
+class ClipboardFileDownloaded extends ClipboardState {
+  final ClipboardItem item;
+  final Uint8List bytes;
+  
+  const ClipboardFileDownloaded({
+    required this.item,
+    required this.bytes,
+  });
+  
+  @override
+  List<Object?> get props => [item, bytes];
+}
+
+/// Media upload in progress
+class ClipboardUploading extends ClipboardState {
+  final String fileName;
+  final double progress;
+  
+  const ClipboardUploading({
+    required this.fileName,
+    this.progress = 0.0,
+  });
+  
+  @override
+  List<Object?> get props => [fileName, progress];
+}
+

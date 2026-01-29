@@ -6,6 +6,7 @@ import '../theme/app_typography.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
 import '../blocs/blocs.dart';
+import '../services/download_service.dart';
 
 /// History Mode Screen
 /// Browsable clipboard archive
@@ -23,6 +24,70 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _openFullScreenImage(ClipboardItem item) {
+    if (item.downloadUrl == null) return;
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FullScreenImageViewer(
+          imageUrl: item.downloadUrl!,
+          fileName: item.fileName,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadFile(ClipboardItem item) async {
+    if (item.downloadUrl == null) return;
+    
+    // Show downloading snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Downloading ${item.fileName ?? "file"}...'),
+          backgroundColor: AppColors.primaryAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+    
+    // Download using download service
+    final savedPath = await downloadService.downloadFile(
+      url: item.downloadUrl!,
+      fileName: item.fileName ?? 'download',
+    );
+    
+    if (mounted) {
+      if (savedPath != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saved to Downloads: ${item.fileName}'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Download failed'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -216,28 +281,129 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Full content
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.cardBorder),
+                      // Full content - different display for media vs text
+                      if (item.isMediaItem) ...[
+                        // Image preview
+                        if (item.type == ClipboardContentType.image && 
+                            (item.thumbnailUrl != null || item.downloadUrl != null))
+                          GestureDetector(
+                            onTap: () => _openFullScreenImage(item),
+                            child: Container(
+                              width: double.infinity,
+                              height: 200,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryBackground,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.cardBorder),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  item.thumbnailUrl ?? item.downloadUrl!,
+                                  fit: BoxFit.contain,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded /
+                                                loadingProgress.expectedTotalBytes!
+                                            : null,
+                                        color: AppColors.primaryAccent,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.broken_image_outlined,
+                                          size: 48,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Failed to load image',
+                                          style: AppTypography.metadata,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          // File info card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.cardBorder),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  item.icon,
+                                  size: 40,
+                                  color: AppColors.primaryAccent,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.fileName ?? 'File',
+                                        style: AppTypography.bodyText,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        item.formattedFileSize,
+                                        style: AppTypography.metadata,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ] else ...[
+                        // Text content display
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBackground,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: SelectableText(
+                            item.content,
+                            style: item.type == ClipboardContentType.code
+                                ? AppTypography.codeText
+                                : AppTypography.bodyText,
+                          ),
                         ),
-                        child: SelectableText(
-                          item.content,
-                          style: item.type == ClipboardContentType.code
-                              ? AppTypography.codeText
-                              : AppTypography.bodyText,
-                        ),
-                      ),
+                      ],
                       const SizedBox(height: 16),
-                      // Actions
-                      Row(
+                      // Actions - use Wrap for better overflow handling
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Expanded(
-                            child: PrimaryButton(
+                          // View/Copy button
+                          if (item.isMediaItem && item.type == ClipboardContentType.image)
+                            PrimaryButton(
+                              label: 'View',
+                              icon: Icons.fullscreen,
+                              onPressed: () => _openFullScreenImage(item),
+                            )
+                          else
+                            PrimaryButton(
                               label: 'Copy',
                               icon: Icons.content_copy_outlined,
                               onPressed: () {
@@ -257,16 +423,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 );
                               },
                             ),
-                          ),
-                          if (item.type == ClipboardContentType.link) ...[
-                            const SizedBox(width: 12),
+                          // Download button for media
+                          if (item.isMediaItem && item.downloadUrl != null)
+                            SecondaryButton(
+                              label: 'Save',
+                              icon: Icons.download_outlined,
+                              onPressed: () => _downloadFile(item),
+                            ),
+                          // Open link button
+                          if (item.type == ClipboardContentType.link)
                             SecondaryButton(
                               label: 'Open',
                               icon: Icons.open_in_new,
                               onPressed: () => _openUrl(item.content),
                             ),
-                          ],
-                          const SizedBox(width: 12),
                           SecondaryButton(
                             label: 'Delete',
                             icon: Icons.delete_outline,

@@ -4,29 +4,38 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/clipboard_item.dart';
 import '../../services/clipboard_repository.dart';
 import '../../services/settings_service.dart';
+import '../../services/storage_service.dart';
+import '../../services/pairing_service.dart';
 import 'clipboard_event.dart';
 import 'clipboard_state.dart';
 
 /// Clipboard BLoC
-/// Manages clipboard monitoring, history, and sync
+/// Manages clipboard monitoring, history, sync, and media uploads
 class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
   final ClipboardRepository _repository;
+  final StorageService _storageService;
   StreamSubscription<List<ClipboardItem>>? _itemsSubscription;
   Timer? _monitoringTimer;
   String? _lastClipboardContent;
   
   ClipboardBloc({
     ClipboardRepository? repository,
+    StorageService? storageService,
   }) : _repository = repository ?? ClipboardRepository(),
+       _storageService = storageService ?? StorageService.instance,
        super(ClipboardInitial()) {
     on<ClipboardHistoryLoaded>(_onHistoryLoaded);
     on<ClipboardMonitoringStarted>(_onMonitoringStarted);
     on<ClipboardMonitoringStopped>(_onMonitoringStopped);
     on<ClipboardItemDetected>(_onItemDetected);
+    on<ClipboardImagePasted>(_onImagePasted);
+    on<ClipboardFileAttached>(_onFileAttached);
+    on<ClipboardSyncStatusChanged>(_onSyncStatusChanged);
     on<ClipboardItemsReceived>(_onItemsReceived);
     on<ClipboardItemCopied>(_onItemCopied);
     on<ClipboardItemDeleted>(_onItemDeleted);
     on<ClipboardHistoryCleared>(_onHistoryCleared);
+    on<ClipboardFileDownloadRequested>(_onFileDownloadRequested);
   }
   
   Future<void> _onHistoryLoaded(
@@ -107,7 +116,7 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
         _lastClipboardContent = content;
         add(ClipboardItemDetected(
           content: content,
-          deviceName: 'This Device', // Will be replaced with actual device name
+          deviceName: 'This Device',
         ));
       }
     } catch (e) {
@@ -134,15 +143,12 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
       final addedItemId = await _repository.addClipboardItem(item);
       
       // If save history is disabled, schedule deletion after sync delay
-      // This allows sync to occur but treats items as transient
       if (!settingsService.saveHistory && addedItemId != null && addedItemId.isNotEmpty) {
         final itemIdToDelete = addedItemId;
         Future.delayed(const Duration(seconds: 30), () async {
           try {
             await _repository.deleteClipboardItem(itemIdToDelete);
-          } catch (_) {
-            // Ignore deletion errors for transient items
-          }
+          } catch (_) {}
         });
       }
       
@@ -152,7 +158,146 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
         emit(currentState.copyWith(currentItem: item));
       }
     } catch (e) {
-      // Handle error silently for now
+      // Handle error silently
+    }
+  }
+
+  /// Handle image paste - upload to Firebase Storage then sync metadata
+  Future<void> _onImagePasted(
+    ClipboardImagePasted event,
+    Emitter<ClipboardState> emit,
+  ) async {
+    await _handleMediaUpload(
+      bytes: event.imageBytes,
+      fileName: event.fileName,
+      mimeType: event.mimeType,
+      deviceName: event.deviceName,
+      emit: emit,
+    );
+  }
+
+  /// Handle file attach - upload to Firebase Storage then sync metadata
+  Future<void> _onFileAttached(
+    ClipboardFileAttached event,
+    Emitter<ClipboardState> emit,
+  ) async {
+    await _handleMediaUpload(
+      bytes: event.fileBytes,
+      fileName: event.fileName,
+      mimeType: event.mimeType,
+      deviceName: event.deviceName,
+      emit: emit,
+    );
+  }
+
+  /// Common method for uploading media (images and files)
+  /// FIXED: Upload to Storage FIRST, then create Firestore item only after success
+  Future<void> _handleMediaUpload({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+    required String deviceName,
+    required Emitter<ClipboardState> emit,
+  }) async {
+    // Validate file size
+    if (bytes.length > maxFileSizeBytes) {
+      // Don't emit error state that clears history, just show snackbar via UI
+      return;
+    }
+
+    final sessionId = pairingService.currentSessionId;
+    if (sessionId == null) {
+      // Session not connected - don't crash the bloc
+      return;
+    }
+
+    try {
+      // Generate a temporary item ID for storage path
+      final tempItemId = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      // STEP 1: Upload to Firebase Storage FIRST
+      UploadResult uploadResult;
+      try {
+        uploadResult = await _storageService.uploadFile(
+          bytes: bytes,
+          fileName: fileName,
+          sessionId: sessionId,
+          itemId: tempItemId,
+          mimeType: mimeType,
+          onProgress: (progress) {
+            // Progress tracking could be added here
+          },
+        );
+      } catch (storageError) {
+        // Storage upload failed - don't create Firestore item
+        // Don't emit error that clears state
+        return;
+      }
+
+      // STEP 2: Create Firestore item ONLY after successful upload
+      final mediaItem = ClipboardItem.createMedia(
+        fileName: fileName,
+        fileSize: bytes.length,
+        mimeType: mimeType,
+        deviceName: deviceName,
+        downloadUrl: uploadResult.downloadUrl,
+        thumbnailUrl: uploadResult.thumbnailUrl,
+      );
+
+      // Add complete item to Firestore (with valid download URL)
+      final itemId = await _repository.addClipboardItem(mediaItem);
+      
+      if (itemId == null) {
+        // Firestore creation failed - cleanup storage
+        try {
+          await _storageService.deleteItemFiles(sessionId, tempItemId);
+        } catch (_) {}
+        return;
+      }
+
+      // If save history is disabled, schedule deletion
+      if (!settingsService.saveHistory) {
+        Future.delayed(const Duration(seconds: 30), () async {
+          try {
+            await _repository.deleteClipboardItem(itemId);
+            await _storageService.deleteItemFiles(sessionId, tempItemId);
+          } catch (_) {}
+        });
+      }
+
+    } catch (e) {
+      // Catch-all: don't crash the bloc or clear history
+      // Error is logged silently
+    }
+  }
+
+  /// Handle sync status change
+  Future<void> _onSyncStatusChanged(
+    ClipboardSyncStatusChanged event,
+    Emitter<ClipboardState> emit,
+  ) async {
+    // Update item status in repository
+    // This would be called when offline->online sync completes
+  }
+
+  /// Handle file download request
+  Future<void> _onFileDownloadRequested(
+    ClipboardFileDownloadRequested event,
+    Emitter<ClipboardState> emit,
+  ) async {
+    if (event.item.downloadUrl == null) return;
+
+    try {
+      final bytes = await _storageService.downloadFile(event.item.downloadUrl!);
+      if (bytes != null) {
+        // Emit download complete state or handle file
+        emit(ClipboardFileDownloaded(
+          item: event.item,
+          bytes: bytes,
+        ));
+      }
+    } catch (e) {
+      emit(ClipboardError('Download failed: $e'));
     }
   }
   
@@ -177,11 +322,12 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
     Emitter<ClipboardState> emit,
   ) async {
     try {
-      // Copy to system clipboard
-      await Clipboard.setData(ClipboardData(text: event.item.content));
-      _lastClipboardContent = event.item.content;
+      // For media items, don't copy content to clipboard
+      if (!event.item.isMediaItem) {
+        await Clipboard.setData(ClipboardData(text: event.item.content));
+        _lastClipboardContent = event.item.content;
+      }
       
-      // Emit copied state briefly
       final currentState = state;
       List<ClipboardItem> items = [];
       
@@ -193,7 +339,6 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
       
       emit(ClipboardItemCopiedState(item: event.item, items: items));
       
-      // Return to previous state after a short delay
       await Future.delayed(const Duration(milliseconds: 500));
       
       if (state is ClipboardItemCopiedState) {
@@ -210,6 +355,12 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
   ) async {
     try {
       await _repository.deleteClipboardItem(event.itemId);
+      
+      // Also delete associated files from storage
+      final sessionId = pairingService.currentSessionId;
+      if (sessionId != null) {
+        await _storageService.deleteItemFiles(sessionId, event.itemId);
+      }
     } catch (e) {
       emit(ClipboardError('Failed to delete: $e'));
     }

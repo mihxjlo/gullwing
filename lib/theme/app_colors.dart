@@ -14,6 +14,7 @@ class AppColors {
   // Status colors
   static const Color success = Color(0xFF22C55E);
   static const Color warning = Color(0xFFF59E0B);
+  static const Color warningColor = warning;  // Alias for consistency
   static const Color error = Color(0xFFEF4444);
   
   // Text colors
