@@ -10,6 +10,7 @@ import '../models/models.dart';
 import '../widgets/widgets.dart';
 import '../blocs/blocs.dart';
 import '../services/settings_service.dart';
+import '../services/download_service.dart';
 
 /// Live Mode Screen
 /// Shows current clipboard state + connected devices with manual input support
@@ -141,6 +142,58 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _saveMedia(ClipboardItem item) async {
+    if (item.downloadUrl == null) return;
+    
+    final fileName = item.fileName ?? 'file';
+    
+    // Show saving indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saving $fileName...'),
+          backgroundColor: AppColors.primaryAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+    
+    final savedPath = await downloadService.downloadFile(
+      url: item.downloadUrl!,
+      fileName: fileName,
+    );
+    
+    if (!mounted) return;
+    
+    if (savedPath != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saved to Downloads: $fileName'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save $fileName'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
     }
   }
 
@@ -481,6 +534,21 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+          // File size limit hint
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.info_outline, size: 12, color: AppColors.secondaryText),
+                const SizedBox(width: 4),
+                Text(
+                  'Maximum file/image size: 10MB',
+                  style: AppTypography.metadata,
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
           // Send button
           SizedBox(
@@ -708,7 +776,24 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(item.syncIcon, size: 16, color: AppColors.secondaryText),
+              // Icons column: cloud sync icon on top, save button below
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(item.syncIcon, size: 16, color: AppColors.secondaryText),
+                  if (item.downloadUrl != null && item.syncStatus == SyncStatus.synced)
+                    const SizedBox(height: 4),
+                  if (item.downloadUrl != null && item.syncStatus == SyncStatus.synced)
+                    GestureDetector(
+                      onTap: () => _saveMedia(item),
+                      child: Icon(
+                        Icons.save_alt_outlined,
+                        size: 16,
+                        color: AppColors.primaryAccent,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
