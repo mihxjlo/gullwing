@@ -291,10 +291,32 @@ class SyncManager {
       _receivedItemsController.add(item);
     };
     
+    // Nearby connection changes - re-detect route
+    _nearbyService.onConnectionResult = (endpointId, accepted) {
+      if (accepted) {
+        debugPrint('SyncManager: Nearby device connected, re-detecting route');
+        _detectRoute();
+      }
+    };
+    _nearbyService.onDisconnected = (deviceId) {
+      debugPrint('SyncManager: Nearby device disconnected, re-detecting route');
+      _detectRoute();
+    };
+    
     // LAN items
     _lanService.onItemReceived = (item, fromDeviceId) {
       _offlineQueue.markProcessed(item); // Prevent echo
       _receivedItemsController.add(item);
+    };
+    
+    // LAN connection changes - re-detect route
+    _lanService.onConnected = (device) {
+      debugPrint('SyncManager: LAN device connected, re-detecting route');
+      _detectRoute();
+    };
+    _lanService.onDisconnected = (deviceId) {
+      debugPrint('SyncManager: LAN device disconnected, re-detecting route');
+      _detectRoute();
     };
   }
   

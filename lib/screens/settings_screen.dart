@@ -295,24 +295,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 16),
                   if (!isConnected || devices.isEmpty) const Divider(),
                   if (!isConnected || devices.isEmpty) const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: PrimaryButton(
-                      label: isConnected ? 'Manage Devices' : 'Pair a Device',
-                      icon: isConnected ? Icons.settings_outlined : Icons.add_link_outlined,
-                      onPressed: () async {
-                        final result = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute(
-                            builder: (context) => const PairingScreen(),
-                          ),
-                        );
-                        if (result == true && context.mounted) {
-                          // Reload pairing state
-                          context.read<PairingBloc>().add(const PairingSessionLoaded());
-                        }
-                      },
+                  // Show "Pair a Device" button only when not connected
+                  if (!isConnected) 
+                    SizedBox(
+                      width: double.infinity,
+                      child: PrimaryButton(
+                        label: 'Pair a Device',
+                        icon: Icons.add_link_outlined,
+                        onPressed: () async {
+                          final result = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (context) => const PairingScreen(),
+                            ),
+                          );
+                          if (result == true && context.mounted) {
+                            // Reload pairing state
+                            context.read<PairingBloc>().add(const PairingSessionLoaded());
+                          }
+                        },
+                      ),
                     ),
-                  ),
                   if (isConnected) ...[
                     const SizedBox(height: 12),
                     SizedBox(
@@ -337,7 +339,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildDeviceListItem(ConnectedDevice device) {
     final isOnline = device.isOnline;
-    final hasLan = device.hasLanInfo;
+    // Use sync route to determine LAN/Cloud badge, not device's hasLanInfo
+    final syncManager = SyncManager.instance;
+    final hasLan = syncManager.currentRoute == SyncRoute.lan || syncManager.currentRoute == SyncRoute.nearby;
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),

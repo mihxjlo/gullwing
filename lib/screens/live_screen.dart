@@ -400,6 +400,7 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // App logo
                 Image.asset(
@@ -409,7 +410,7 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'Live Clipboard',
+                  'ClipSync',
                   style: AppTypography.screenTitle,
                 ),
                 const SizedBox(width: 12),
@@ -514,12 +515,11 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: 12),
-          // Attach buttons row
           Row(
             children: [
               Expanded(
                 child: SecondaryButton(
-                  label: 'Attach Image',
+                  label: 'Image',
                   icon: Icons.image_outlined,
                   onPressed: _attachImage,
                 ),
@@ -527,7 +527,7 @@ class _LiveScreenState extends State<LiveScreen> with WidgetsBindingObserver {
               const SizedBox(width: 12),
               Expanded(
                 child: SecondaryButton(
-                  label: 'Attach File',
+                  label: 'File',
                   icon: Icons.attach_file_outlined,
                   onPressed: _attachFile,
                 ),
