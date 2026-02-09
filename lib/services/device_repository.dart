@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/connected_device.dart';
 import 'firebase_service.dart';
 import 'pairing_service.dart';
@@ -38,27 +39,41 @@ class DeviceRepository {
       return Stream.value([]);
     }
     
+    final currentDeviceId = _pairingService.deviceId;
+    
     return collection
         .orderBy('lastSeen', descending: true)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
-            return ConnectedDevice.fromFirestore(doc.data(), doc.id);
+            final device = ConnectedDevice.fromFirestore(doc.data(), doc.id);
+            // Override isCurrentDevice based on local comparison
+            return device.copyWith(isCurrentDevice: doc.id == currentDeviceId);
           }).toList();
         });
   }
   
-  /// Get all devices (non-realtime)
+  /// Get all devices (non-realtime snapshot)
+  /// Note: Cache is kept fresh by the real-time watchDevices() listener
   Future<List<ConnectedDevice>> getDevices() async {
     final collection = _devicesCollection;
-    if (collection == null) return [];
+    if (collection == null) {
+      debugPrint('DeviceRepository.getDevices: No session, returning empty');
+      return [];
+    }
     
+    final currentDeviceId = _pairingService.deviceId;
+    
+    // Use default behavior - Firestore cache is kept fresh by real-time listeners
     final snapshot = await collection
         .orderBy('lastSeen', descending: true)
         .get();
     
+    debugPrint('DeviceRepository.getDevices: Found ${snapshot.docs.length} devices');
+    
     return snapshot.docs.map((doc) {
-      return ConnectedDevice.fromFirestore(doc.data(), doc.id);
+      final device = ConnectedDevice.fromFirestore(doc.data(), doc.id);
+      return device.copyWith(isCurrentDevice: doc.id == currentDeviceId);
     }).toList();
   }
   
@@ -74,7 +89,10 @@ class DeviceRepository {
   }
   
   /// Register this device with default info
-  Future<void> registerCurrentDevice() async {
+  Future<void> registerCurrentDevice({
+    String? localIp,
+    int? lanPort,
+  }) async {
     final device = ConnectedDevice(
       id: _pairingService.deviceId,
       name: _pairingService.deviceName,
@@ -83,8 +101,34 @@ class DeviceRepository {
       lastSeen: DateTime.now(),
       isCurrentDevice: true,
       sessionId: _pairingService.currentSessionId,
+      localIp: localIp,
+      lanPort: lanPort,
     );
     await registerDevice(device);
+  }
+  
+  /// Update device's local IP address (for LAN discovery)
+  Future<void> updateLocalIp(String deviceId, String? ip, int? port) async {
+    debugPrint('DeviceRepository.updateLocalIp called: deviceId=$deviceId, ip=$ip, port=$port');
+    debugPrint('DeviceRepository.updateLocalIp: sessionId=${_pairingService.currentSessionId}');
+    
+    final collection = _devicesCollection;
+    if (collection == null) {
+      debugPrint('DeviceRepository.updateLocalIp: ✗ Collection is null (no session), cannot update');
+      return;
+    }
+    
+    try {
+      // Use set with merge so it works even if document doesn't exist yet
+      await collection.doc(deviceId).set({
+        'localIp': ip,
+        'lanPort': port,
+        'lastSeen': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      debugPrint('DeviceRepository.updateLocalIp: ✓ Successfully updated IP in Firebase');
+    } catch (e) {
+      debugPrint('DeviceRepository.updateLocalIp: ✗ Failed to update: $e');
+    }
   }
   
   DeviceType _deviceTypeFromString(String type) {

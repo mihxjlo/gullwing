@@ -29,6 +29,16 @@ class PairingSessionJoined extends PairingEvent {
   List<Object?> get props => [pairingCode];
 }
 
+/// Join an existing session directly by session ID (from LAN invitation)
+class PairingSessionJoinedById extends PairingEvent {
+  final String sessionId;
+  
+  const PairingSessionJoinedById(this.sessionId);
+  
+  @override
+  List<Object?> get props => [sessionId];
+}
+
 /// Leave the current session
 class PairingSessionLeft extends PairingEvent {
   const PairingSessionLeft();

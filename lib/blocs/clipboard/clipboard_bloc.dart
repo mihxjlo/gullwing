@@ -6,6 +6,7 @@ import '../../services/clipboard_repository.dart';
 import '../../services/settings_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/pairing_service.dart';
+import '../../services/sync_manager.dart';
 import 'clipboard_event.dart';
 import 'clipboard_state.dart';
 
@@ -14,7 +15,9 @@ import 'clipboard_state.dart';
 class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
   final ClipboardRepository _repository;
   final StorageService _storageService;
+  final SyncManager _syncManager = syncManager;
   StreamSubscription<List<ClipboardItem>>? _itemsSubscription;
+  StreamSubscription<ClipboardItem>? _localItemsSubscription;
   Timer? _monitoringTimer;
   String? _lastClipboardContent;
   
@@ -45,11 +48,17 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
     emit(ClipboardLoading());
     
     try {
-      // Subscribe to real-time updates
+      // Subscribe to real-time updates from Firestore
       _itemsSubscription?.cancel();
       _itemsSubscription = _repository.watchClipboardItems().listen(
         (items) => add(ClipboardItemsReceived(items)),
         onError: (error) => emit(ClipboardError(error.toString())),
+      );
+      
+      // Subscribe to items received via local connections (Nearby/LAN)
+      _localItemsSubscription?.cancel();
+      _localItemsSubscription = _syncManager.receivedItems.listen(
+        (item) => add(ClipboardItemsReceived([item])),
       );
     } catch (e) {
       emit(ClipboardError(e.toString()));
@@ -139,15 +148,14 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
         deviceName: event.deviceName,
       );
       
-      // Add to Firestore for sync
-      final addedItemId = await _repository.addClipboardItem(item);
+      // Route through SyncManager (Nearby -> LAN -> Firebase)
+      final result = await _syncManager.syncItem(item);
       
-      // If save history is disabled, schedule deletion after sync delay
-      if (!settingsService.saveHistory && addedItemId != null && addedItemId.isNotEmpty) {
-        final itemIdToDelete = addedItemId;
+      // If save history is disabled and sync was successful, schedule deletion
+      if (!settingsService.saveHistory && result.success) {
         Future.delayed(const Duration(seconds: 30), () async {
           try {
-            await _repository.deleteClipboardItem(itemIdToDelete);
+            await _repository.deleteClipboardItem(item.id);
           } catch (_) {}
         });
       }
@@ -381,6 +389,7 @@ class ClipboardBloc extends Bloc<ClipboardEvent, ClipboardState> {
   @override
   Future<void> close() {
     _itemsSubscription?.cancel();
+    _localItemsSubscription?.cancel();
     _monitoringTimer?.cancel();
     return super.close();
   }

@@ -10,6 +10,8 @@ class ConnectedDevice {
   final DateTime lastSeen;
   final bool isCurrentDevice;
   final String? sessionId;
+  final String? localIp;    // For LAN discovery via Firebase
+  final int? lanPort;       // WebSocket port for LAN sync
 
   const ConnectedDevice({
     required this.id,
@@ -19,6 +21,8 @@ class ConnectedDevice {
     required this.lastSeen,
     this.isCurrentDevice = false,
     this.sessionId,
+    this.localIp,
+    this.lanPort,
   });
 
   IconData get icon {
@@ -68,7 +72,7 @@ class ConnectedDevice {
 
   /// Convert to Firestore document
   Map<String, dynamic> toFirestore() {
-    return {
+    final data = <String, dynamic>{
       'name': name,
       'type': type.name,
       'status': status.name,
@@ -76,6 +80,16 @@ class ConnectedDevice {
       'isCurrentDevice': isCurrentDevice,
       'sessionId': sessionId,
     };
+    
+    // Only include LAN info if present (don't overwrite existing with null)
+    if (localIp != null) {
+      data['localIp'] = localIp;
+    }
+    if (lanPort != null) {
+      data['lanPort'] = lanPort;
+    }
+    
+    return data;
   }
 
   /// Create from Firestore document
@@ -96,6 +110,8 @@ class ConnectedDevice {
           : DateTime.now(),
       isCurrentDevice: data['isCurrentDevice'] as bool? ?? false,
       sessionId: data['sessionId'] as String?,
+      localIp: data['localIp'] as String?,
+      lanPort: data['lanPort'] as int?,
     );
   }
 
@@ -108,6 +124,8 @@ class ConnectedDevice {
     DateTime? lastSeen,
     bool? isCurrentDevice,
     String? sessionId,
+    String? localIp,
+    int? lanPort,
   }) {
     return ConnectedDevice(
       id: id ?? this.id,
@@ -117,8 +135,13 @@ class ConnectedDevice {
       lastSeen: lastSeen ?? this.lastSeen,
       isCurrentDevice: isCurrentDevice ?? this.isCurrentDevice,
       sessionId: sessionId ?? this.sessionId,
+      localIp: localIp ?? this.localIp,
+      lanPort: lanPort ?? this.lanPort,
     );
   }
+
+  /// Check if device has LAN info for local connection
+  bool get hasLanInfo => localIp != null && lanPort != null;
 }
 
 enum DeviceType {

@@ -57,6 +57,16 @@ dependencies:
   path_provider: ^2.1.2
   http: ^1.2.0
   file_picker: ^8.0.0
+  
+  # Offline Sync
+  nearby_connections: ^4.1.0       # Android P2P sync
+  hive: ^2.2.3                     # Offline queue storage
+  hive_flutter: ^1.1.0             # Hive Flutter integration
+  shelf: ^1.4.1                    # WebSocket server
+  shelf_web_socket: ^1.0.2         # WebSocket support
+  web_socket_channel: ^2.4.0       # WebSocket client
+  permission_handler: ^11.3.0      # Runtime permissions
+  network_info_plus: ^4.1.0        # Get local IP address
 
 dev_dependencies:
   flutter_test:

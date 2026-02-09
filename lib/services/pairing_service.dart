@@ -103,6 +103,16 @@ class PairingService {
     return session;
   }
   
+  /// Join an existing session directly by session ID (from LAN invitation)
+  Future<PairingSession> joinSessionById(String sessionId) async {
+    final session = await _sessionRepository.joinSessionById(
+      sessionId: sessionId,
+      deviceId: deviceId,
+    );
+    await _setCurrentSession(session.id);
+    return session;
+  }
+  
   /// Leave the current session
   Future<void> leaveSession() async {
     final sessionId = currentSessionId;

@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/clipboard_item.dart';
 
 /// Callback for upload/download progress (0.0 to 1.0)

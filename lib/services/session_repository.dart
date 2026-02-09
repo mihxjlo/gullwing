@@ -93,6 +93,36 @@ class SessionRepository {
     return session;
   }
   
+  /// Join an existing session directly by session ID (from LAN invitation)
+  /// This bypasses the pairing code and joins directly by ID
+  Future<PairingSession> joinSessionById({
+    required String sessionId,
+    required String deviceId,
+  }) async {
+    // Get the session directly by ID
+    final sessionDoc = await _sessionsCollection.doc(sessionId).get();
+    
+    if (!sessionDoc.exists) {
+      throw PairingException('Session not found');
+    }
+    
+    final session = PairingSession.fromFirestore(sessionDoc.data()!, sessionDoc.id);
+    
+    if (!session.isActive) {
+      throw PairingException('Session is no longer active');
+    }
+    
+    // Add device to session if not already present
+    if (!session.deviceIds.contains(deviceId)) {
+      await _sessionsCollection.doc(session.id).update({
+        'deviceIds': FieldValue.arrayUnion([deviceId]),
+      });
+      return session.addDevice(deviceId);
+    }
+    
+    return session;
+  }
+  
   /// Get a session by ID
   Future<PairingSession?> getSession(String sessionId) async {
     final doc = await _sessionsCollection.doc(sessionId).get();

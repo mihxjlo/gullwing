@@ -31,6 +31,7 @@ class PairingBloc extends Bloc<PairingEvent, PairingState> {
     on<PairingSessionLoaded>(_onSessionLoaded);
     on<PairingSessionCreated>(_onSessionCreated);
     on<PairingSessionJoined>(_onSessionJoined);
+    on<PairingSessionJoinedById>(_onSessionJoinedById);
     on<PairingSessionLeft>(_onSessionLeft);
     on<PairingCodeRefreshed>(_onCodeRefreshed);
     on<PairingSessionUpdated>(_onSessionUpdated);
@@ -133,6 +134,32 @@ class PairingBloc extends Bloc<PairingEvent, PairingState> {
       add(const CurrentDeviceRegistered());
     } on PairingException catch (e) {
       emit(PairingError(e.message));
+    } catch (e) {
+      emit(PairingError('Failed to join session: $e'));
+    }
+  }
+  
+  /// Join session directly by ID (from LAN invitation)
+  Future<void> _onSessionJoinedById(
+    PairingSessionJoinedById event,
+    Emitter<PairingState> emit,
+  ) async {
+    emit(const PairingLoading('Joining session via LAN...'));
+    
+    try {
+      await _pairingService.init();
+      final session = await _pairingService.joinSessionById(event.sessionId);
+      
+      _watchSession(session.id);
+      
+      emit(PairingConnected(
+        session: session,
+        devices: [],
+        isHost: false,
+      ));
+      
+      // Register this device
+      add(const CurrentDeviceRegistered());
     } catch (e) {
       emit(PairingError('Failed to join session: $e'));
     }

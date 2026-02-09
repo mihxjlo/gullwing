@@ -1,6 +1,8 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -9,6 +11,14 @@ import 'blocs/blocs.dart';
 import 'models/models.dart';
 import 'services/settings_service.dart';
 import 'services/pairing_service.dart';
+import 'services/sync_manager.dart';
+import 'services/trusted_devices_service.dart';
+import 'services/nearby_service.dart';
+import 'widgets/invitation_banner.dart';
+import 'widgets/connection_request_dialog.dart';
+
+/// Global navigator key for showing dialogs from services
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// Helper to convert device type string to enum
 DeviceType _deviceTypeFromString(String type) {
@@ -17,6 +27,45 @@ DeviceType _deviceTypeFromString(String type) {
     case 'ios': return DeviceType.ios;
     case 'web': return DeviceType.web;
     default: return DeviceType.desktop;
+  }
+}
+
+/// Setup Nearby connection handler with platform safety guards
+/// Only runs on Android - Desktop platforms (Windows/macOS) cannot use Nearby Connections
+void _setupNearbyHandler() {
+  // Skip on Web (no dart:io Platform available)
+  if (kIsWeb) {
+    debugPrint('main: Skipping Nearby setup on Web');
+    return;
+  }
+  
+  // Skip on non-Android platforms (Windows, macOS, Linux)
+  if (!Platform.isAndroid) {
+    debugPrint('main: Skipping Nearby setup on ${Platform.operatingSystem} (not supported)');
+    return;
+  }
+  
+  // Try-catch to handle any plugin initialization errors gracefully
+  try {
+    nearbyService.onConnectionRequested = (device) {
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        ConnectionRequestDialog.show(
+          context: context,
+          deviceName: device.name,
+          authToken: device.authToken,
+          onAccept: () async {
+            await nearbyService.acceptConnection(device.endpointId);
+          },
+          onReject: () async {
+            await nearbyService.rejectConnection(device.endpointId);
+          },
+        );
+      }
+    };
+    debugPrint('main: Nearby handler registered successfully');
+  } catch (e) {
+    debugPrint('main: Failed to setup Nearby handler (plugin may be unavailable): $e');
   }
 }
 
@@ -33,6 +82,21 @@ void main() async {
   
   // Initialize pairing service (loads saved session)
   await pairingService.init();
+  
+  // Initialize trusted devices service
+  await trustedDevicesService.init();
+  
+  // Initialize sync manager with device info
+  await syncManager.init(
+    deviceId: pairingService.deviceId,
+    deviceName: pairingService.deviceName,
+    sessionId: pairingService.currentSessionId,
+  );
+  
+  // Setup Nearby connection request handler
+  // Only on Android - Nearby Connections requires Google Play Services
+  // Desktop platforms (Windows/macOS) cannot use this plugin
+  _setupNearbyHandler();
   
   // Set system UI overlay style for dark theme
   SystemChrome.setSystemUIOverlayStyle(
@@ -71,6 +135,7 @@ class ClipSyncApp extends StatelessWidget {
         title: 'ClipSync',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
+        navigatorKey: navigatorKey,
         home: MultiBlocListener(
           listeners: [
             BlocListener<AuthBloc, AuthState>(
@@ -88,10 +153,12 @@ class ClipSyncApp extends StatelessWidget {
                 return (previous is! PairingConnected && current is PairingConnected) ||
                        (previous is PairingConnected && current is! PairingConnected);
               },
-              listener: (context, state) {
+              listener: (context, state) async {
                 // When disconnecting, clear clipboard history first
                 if (state is PairingDisconnected) {
                   context.read<ClipboardBloc>().add(ClipboardHistoryCleared());
+                  // Update SyncManager session (stops LAN server)
+                  await syncManager.updateSession(null);
                 }
                 
                 // Reload clipboard and devices when session changes
@@ -100,6 +167,13 @@ class ClipSyncApp extends StatelessWidget {
                 
                 // Register current device to start heartbeat
                 if (state is PairingConnected) {
+                  // Update SyncManager with new session (starts LAN server and publishes IP)
+                  await syncManager.updateSession(pairingService.currentSessionId);
+                  
+                  // Get LAN info from sync manager (set by _autoStartLanServer)
+                  final localIp = syncManager.currentDeviceLocalIp;
+                  const lanPort = 8765; // LanService.defaultPort
+                  
                   final device = ConnectedDevice(
                     id: pairingService.deviceId,
                     name: pairingService.deviceName,
@@ -108,13 +182,23 @@ class ClipSyncApp extends StatelessWidget {
                     lastSeen: DateTime.now(),
                     isCurrentDevice: true,
                     sessionId: pairingService.currentSessionId,
+                    localIp: localIp,
+                    lanPort: localIp != null ? lanPort : null,
                   );
                   context.read<DevicesBloc>().add(DeviceRegistered(device));
+                  
+                  // Probe other devices for LAN availability (smart promotion)
+                  // Delay gives time for Firebase real-time updates to propagate
+                  Future.delayed(const Duration(seconds: 4), () {
+                    syncManager.probeAllDevicesForLan();
+                  });
                 }
               },
             ),
           ],
-          child: const NavigationShell(),
+          child: const InvitationBanner(
+            child: NavigationShell(),
+          ),
         ),
       ),
     );

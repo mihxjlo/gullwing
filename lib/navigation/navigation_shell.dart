@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/app_colors.dart';
 import '../screens/screens.dart';
+import '../widgets/connect_bottom_sheet.dart';
+import '../blocs/pairing/pairing_bloc.dart';
+import '../blocs/pairing/pairing_state.dart';
 
 /// Main navigation shell with bottom navigation bar
 class NavigationShell extends StatefulWidget {
@@ -17,6 +21,12 @@ class _NavigationShellState extends State<NavigationShell> {
     LiveScreen(),
     HistoryScreen(),
     SettingsScreen(),
+  ];
+
+  final List<String> _titles = const [
+    'Live',
+    'History',
+    'Settings',
   ];
 
   final List<NavigationDestination> _destinations = const [
@@ -40,6 +50,58 @@ class _NavigationShellState extends State<NavigationShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryBackground,
+        elevation: 0,
+        title: Text(
+          _titles[_currentIndex],
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          // Connect button with state awareness
+          BlocBuilder<PairingBloc, PairingState>(
+            builder: (context, state) {
+              final isConnected = state is PairingConnected;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.devices,
+                      color: isConnected 
+                          ? AppColors.success 
+                          : AppColors.primaryText,
+                    ),
+                    onPressed: () => ConnectBottomSheet.show(context),
+                    tooltip: 'Connect to Devices',
+                  ),
+                  // Green dot badge when connected
+                  if (isConnected)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.primaryBackground,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 200),
         transitionBuilder: (child, animation) {

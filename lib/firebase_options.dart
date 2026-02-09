@@ -25,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -72,4 +66,27 @@ class DefaultFirebaseOptions {
     storageBucket: 'gullwing-df99d.firebasestorage.app',
     iosBundleId: 'com.clipsync.clipsync',
   );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyDXcAHfREtgF9uQSuwh6XeLWJYGspVyiMw',
+    appId: '1:917815174581:web:51882894e6defab99065fc',
+    messagingSenderId: '917815174581',
+    projectId: 'gullwing-df99d',
+    authDomain: 'gullwing-df99d.firebaseapp.com',
+    storageBucket: 'gullwing-df99d.firebasestorage.app',
+    measurementId: 'G-H8ST7KQ88W',
+  );
+
+  // PLACEHOLDER: Run `flutterfire configure --platforms=windows` to generate valid keys
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyCWV3z7O_A-cuRNnGpkjzWxcLRUorOyal0',
+    appId: '1:917815174581:ios:75ae7aab797697039065fc',
+    messagingSenderId: '917815174581',
+    projectId: 'gullwing-df99d',
+    storageBucket: 'gullwing-df99d.firebasestorage.app',
+    iosBundleId: 'com.clipsync.clipsync',
+  );
+
+  // PLACEHOLDER: Run `flutterfire configure --platforms=macos` to generate valid keys
 }

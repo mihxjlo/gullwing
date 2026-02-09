@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/widgets.dart';
 import '../services/settings_service.dart';
+import '../services/sync_manager.dart';
 import '../blocs/pairing/pairing.dart';
 import 'pairing_screen.dart';
 
@@ -132,6 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return BlocBuilder<PairingBloc, PairingState>(
       builder: (context, pairingState) {
         final isConnected = pairingState is PairingConnected;
+        final connectedState = isConnected ? pairingState : null;
         
         return BlocBuilder<DevicesBloc, DevicesState>(
           builder: (context, devicesState) {
@@ -210,6 +212,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   
+                  // Sync route indicator
+                  if (isConnected) ...[
+                    const SizedBox(height: 12),
+                    StreamBuilder<SyncRoute>(
+                      stream: syncManager.routeChanges,
+                      initialData: syncManager.currentRoute,
+                      builder: (context, snapshot) {
+                        final route = snapshot.data ?? SyncRoute.firebase;
+                        return _buildSyncRouteIndicator(route);
+                      },
+                    ),
+                  ],
+                  
                   // Device list
                   if (isConnected && devices.isNotEmpty) ...[
                     const SizedBox(height: 16),
@@ -219,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                   
                   // Session code display (for sharing with new devices)
-                  if (isConnected && (pairingState as PairingConnected).session.pairingCode.isNotEmpty) ...[
+                  if (isConnected && connectedState!.session.pairingCode.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 12),
@@ -248,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  (pairingState as PairingConnected).session.pairingCode,
+                                  connectedState.session.pairingCode,
                                   style: AppTypography.codeText.copyWith(
                                     fontSize: 16,
                                     letterSpacing: 4,
@@ -265,7 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             onPressed: () {
                               Clipboard.setData(ClipboardData(
-                                text: (pairingState as PairingConnected).session.pairingCode,
+                                text: connectedState.session.pairingCode,
                               ));
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Session code copied!')),
@@ -322,6 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildDeviceListItem(ConnectedDevice device) {
     final isOnline = device.isOnline;
+    final hasLan = device.hasLanInfo;
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -347,9 +363,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      device.name,
-                      style: AppTypography.bodyText,
+                    Flexible(
+                      child: Text(
+                        device.name,
+                        style: AppTypography.bodyText,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     if (device.isCurrentDevice) ...[
                       const SizedBox(width: 6),
@@ -370,11 +389,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ],
                 ),
-                Text(
-                  device.lastSeenText,
-                  style: AppTypography.metadata.copyWith(
-                    color: isOnline ? AppColors.success : AppColors.secondaryText,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      device.lastSeenText,
+                      style: AppTypography.metadata.copyWith(
+                        color: isOnline ? AppColors.success : AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // LAN badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: hasLan 
+                            ? const Color(0xFF34D399).withAlpha(26)
+                            : AppColors.primaryAccent.withAlpha(26),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            hasLan ? Icons.wifi : Icons.cloud_outlined,
+                            size: 10,
+                            color: hasLan ? const Color(0xFF34D399) : AppColors.primaryAccent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            hasLan ? 'LAN' : 'Cloud',
+                            style: AppTypography.smallLabel.copyWith(
+                              color: hasLan ? const Color(0xFF34D399) : AppColors.primaryAccent,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -385,6 +437,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isOnline ? AppColors.success : AppColors.secondaryText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSyncRouteIndicator(SyncRoute route) {
+    IconData icon;
+    Color color;
+    String label;
+    String description;
+    
+    switch (route) {
+      case SyncRoute.nearby:
+        icon = Icons.bluetooth_connected;
+        color = const Color(0xFF22D3EE); // Cyan
+        label = 'Nearby';
+        description = 'Direct P2P connection';
+        break;
+      case SyncRoute.lan:
+        icon = Icons.wifi;
+        color = const Color(0xFF34D399); // Green
+        label = 'Local Network';
+        description = 'Connected via Wi-Fi';
+        break;
+      case SyncRoute.firebase:
+        icon = Icons.cloud_outlined;
+        color = AppColors.primaryAccent;
+        label = 'Cloud';
+        description = 'Syncing via internet';
+        break;
+      case SyncRoute.offline:
+        icon = Icons.cloud_off_outlined;
+        color = AppColors.warning;
+        label = 'Offline';
+        description = 'Items queued for sync';
+        break;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Connected via $label',
+                  style: AppTypography.metadata.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: AppTypography.metadata.copyWith(
+                    color: color.withOpacity(0.8),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
